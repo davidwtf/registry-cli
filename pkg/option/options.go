@@ -8,16 +8,14 @@ import (
 )
 
 const (
-	TextOutput    = "text"
-	JSONOutput    = "json"
-	DefaultOutput = ""
+	TextOutput = "text"
+	JSONOutput = "json"
 )
 
 var (
 	AllOutputFormats = []string{
 		TextOutput,
 		JSONOutput,
-		DefaultOutput,
 	}
 )
 
@@ -28,14 +26,12 @@ type Options struct {
 	Server      string
 	Repositiory string
 	Output      string
-	MediaType   string
-	Platform    string
 	Destination string
 	Debug       bool
 	AllRepos    bool
 	Insecure    bool
 	PlainHTTP   bool
-	Parellel    bool
+	Parellel    int
 	StdErr      io.Writer
 	StdOut      io.Writer
 	Ctx         context.Context

@@ -20,12 +20,6 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-const (
-	maxParellel = 20
-)
-
-var ()
-
 type tagInfo struct {
 	Repoistory string     `json:"repository"`
 	Tag        string     `json:"tag"`
@@ -37,14 +31,14 @@ type tagInfo struct {
 }
 
 func (t tagInfo) Header() []string {
-	return []string{RepoHeader, TagHeader, PlatformHeader, SizeHeader, CreatedHeader, TypeHeader, DigestHeader}
+	return []string{"REPOSITORY", "TAG", "PLATFORM", "SIZE", "CREATED", "TYPE", "DIGEST"}
 }
 
 func (t *tagInfo) Output(opts *option.Options) error {
 	switch opts.Output {
 	case option.JSONOutput:
 		return opts.Userdata.(*output.JSONArrayWriter).Write(t)
-	case option.TextOutput, option.DefaultOutput:
+	case option.TextOutput:
 		return opts.Userdata.(*output.TextWriter).Write(
 			t.Repoistory, t.Tag, t.Platform,
 			output.SizeToShow(t.Size), output.TimeToShow(t.Created),
@@ -58,7 +52,7 @@ func Tags(opts *option.Options) error {
 	switch opts.Output {
 	case option.JSONOutput:
 		opts.Userdata, err = output.NewJSONArrayWriter(opts.StdOut)
-	case option.TextOutput, option.DefaultOutput:
+	case option.TextOutput:
 		opts.Userdata, err = output.NewTextWriter(opts.StdOut, tagInfo{}.Header()...)
 	default:
 		return errors.ErrUnknownOutput
@@ -121,8 +115,8 @@ func fetchRepoTags(opts *option.Options, cli *client.Client, repoName string) er
 	if err != nil {
 		return err
 	}
-	if opts.Parellel && len(tags) > 1 {
-		numParellel := maxParellel
+	if opts.Parellel > 0 && len(tags) > 1 {
+		numParellel := opts.Parellel
 		if numParellel > len(tags) {
 			numParellel = len(tags)
 		}

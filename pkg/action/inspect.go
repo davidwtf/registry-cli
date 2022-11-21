@@ -20,6 +20,21 @@ import (
 	"helm.sh/helm/v3/pkg/registry"
 )
 
+var AllSupportedConfigMediaTypes = []string{
+	schema2.MediaTypeImageConfig,
+	ocispec.MediaTypeImageConfig,
+	registry.ConfigMediaType,
+}
+
+func IsSupportedConfigMediaTypes(mediaType string) bool {
+	for _, v := range AllSupportedConfigMediaTypes {
+		if v == mediaType {
+			return true
+		}
+	}
+	return false
+}
+
 type manifestList struct {
 	Digest                   digest.Digest                          `json:"digest"`
 	DeserializedManifestList *manifestlist.DeserializedManifestList `json:"deserializedManifest"`
@@ -30,7 +45,7 @@ func (m *manifestList) Output(opts *option.Options) error {
 	switch opts.Output {
 	case option.JSONOutput:
 		return output.WriteJSON(opts.StdOut, m)
-	case option.TextOutput, option.DefaultOutput:
+	case option.TextOutput:
 		return output.PrintStruct(opts.StdOut, m)
 	}
 	return errors.ErrUnknownOutput
@@ -49,7 +64,7 @@ func (m *manifestV1) Output(opts *option.Options) error {
 	switch opts.Output {
 	case option.JSONOutput:
 		return output.WriteJSON(opts.StdOut, m)
-	case option.TextOutput, option.DefaultOutput:
+	case option.TextOutput:
 		return output.PrintStruct(opts.StdOut, m)
 	}
 	return errors.ErrUnknownOutput
@@ -66,7 +81,7 @@ func (m *manifestV2) Output(opts *option.Options) error {
 	switch opts.Output {
 	case option.JSONOutput:
 		return output.WriteJSON(opts.StdOut, m)
-	case option.TextOutput, option.DefaultOutput:
+	case option.TextOutput:
 		return output.PrintStruct(opts.StdOut, m)
 	}
 	return errors.ErrUnknownOutput
@@ -83,7 +98,7 @@ func (m *manifestOCI) Output(opts *option.Options) error {
 	switch opts.Output {
 	case option.JSONOutput:
 		return output.WriteJSON(opts.StdOut, m)
-	case option.TextOutput, option.DefaultOutput:
+	case option.TextOutput:
 		return output.PrintStruct(opts.StdOut, m)
 	}
 	return errors.ErrUnknownOutput

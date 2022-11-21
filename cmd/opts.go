@@ -31,6 +31,9 @@ func rootCmd() *cobra.Command {
 		SilenceUsage:     true,
 		SilenceErrors:    true,
 		TraverseChildren: true,
+		CompletionOptions: cobra.CompletionOptions{
+			DisableDefaultCmd: true,
+		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if opts.Server == "" {
 				opts.Server = os.Getenv(envServer)
@@ -43,8 +46,7 @@ func rootCmd() *cobra.Command {
 			}
 			return nil
 		},
-
-		Version: version.Version,
+		Version: version.BuildVersion,
 	}
 	root.PersistentFlags().StringVarP(&opts.Server, "server", "s", "", "registry address, default use env REGISTRY_ADDRESS")
 	root.PersistentFlags().StringVarP(&opts.Username, "username", "u", "", "registry username")
@@ -63,11 +65,11 @@ func rootCmd() *cobra.Command {
 }
 
 func addRepoOpt(cmd *cobra.Command, opts *option.Options) {
-	cmd.Flags().StringVarP(&opts.Repositiory, "repo", "r", "", "repository")
+	cmd.Flags().StringVarP(&opts.Repositiory, "repository", "r", "", "repository")
 }
 
 func addOutputOpt(cmd *cobra.Command, opts *option.Options) {
-	cmd.Flags().StringVarP(&opts.Output, "output", "o", "", "output format, options: json text, default: text")
+	cmd.Flags().StringVarP(&opts.Output, "output", "o", option.TextOutput, "output format, options: json text")
 }
 
 func needRepo(opts *option.Options) error {

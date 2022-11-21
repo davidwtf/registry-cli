@@ -14,8 +14,8 @@ func Repos(opts *option.Options) error {
 	switch opts.Output {
 	case option.JSONOutput:
 		w, err = output.NewJSONArrayWriter(opts.StdOut)
-	case option.TextOutput, option.DefaultOutput:
-		_, err = fmt.Fprintln(opts.StdOut, RepoHeader)
+	case option.TextOutput:
+		_, err = fmt.Fprintln(opts.StdOut, "REPOSITORY")
 	default:
 		return errors.ErrUnknownOutput
 	}

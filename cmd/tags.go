@@ -10,9 +10,9 @@ import (
 
 func tagsCmd(opts *option.Options) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "tags [command options]",
-		Short:   "list repository's tags",
-		Example: `  tags -s 127.0.0.1:5000 -r repo1 v1.0`,
+		Use:     "tags",
+		Short:   "list tags",
+		Example: `  registrycli tags -s 127.0.0.1:5000 -r repo1`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 0 {
 				return errors.ErrTooManyArgs
@@ -35,9 +35,7 @@ func tagsCmd(opts *option.Options) *cobra.Command {
 	}
 	addRepoOpt(cmd, opts)
 	addOutputOpt(cmd, opts)
-	cmd.Flags().StringVar(&opts.Platform, "platform", "", "only show specified platform")
-	cmd.Flags().StringVar(&opts.Platform, "type", "", "only show specified media type")
 	cmd.Flags().BoolVar(&opts.AllRepos, "all", false, "show all repositories")
-	cmd.Flags().BoolVar(&opts.Parellel, "parellel", true, "fetch tags in parallel")
+	cmd.Flags().IntVar(&opts.Parellel, "parellel", 20, "workers to fetch tags in parallel, set it to 0 to fetch tags serially")
 	return cmd
 }

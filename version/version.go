@@ -1,3 +1,3 @@
 package version
 
-const Version = "dev"
+var BuildVersion = "Unknown"

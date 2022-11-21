@@ -10,9 +10,9 @@ import (
 
 func reposCmd(opts *option.Options) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "repos [command options]",
+		Use:     "repos",
 		Short:   "list all repository names",
-		Example: `  repos -s 127.0.0.1:5000 `,
+		Example: `  registrycli repos -s 127.0.0.1:5000`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 0 {
 				return errors.ErrTooManyArgs
