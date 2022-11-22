@@ -28,23 +28,35 @@ func Del(tagOrDigest string, opts *option.Options) error {
 	}
 
 	dgst := digest.Digest(tagOrDigest)
-	if dgst.Validate() == nil {
-		manifests, err := repo.Manifests(opts.Ctx)
-		if err != nil {
-			opts.WriteDebug("init mainifests services", err)
-			return err
+
+	if opts.Untag {
+		if dgst.Validate() == nil {
+			opts.WriteDebug("need a tag not digest", nil)
+			return fmt.Errorf(`need a tag not digest: "%s"`, tagOrDigest)
 		}
-		if err := manifests.Delete(opts.Ctx, dgst); err != nil {
-			opts.WriteDebug(fmt.Sprintf(`delete digest "%s"`, dgst.String()), err)
-			return err
-		}
-	} else {
 		if err := untag(opts.Ctx, cli, repo, tagOrDigest); err != nil {
 			opts.WriteDebug(fmt.Sprintf(`untag "%s"`, tagOrDigest), err)
 			return err
 		}
-	}
+	} else {
+		manifestService, err := repo.Manifests(opts.Ctx)
+		if err != nil {
+			opts.WriteDebug("init mainifest service", err)
+			return err
+		}
+		if dgst.Validate() != nil {
+			_, err = manifestService.Get(opts.Ctx, "", distribution.WithTag(tagOrDigest), registryclient.ReturnContentDigest(&dgst))
+			if err != nil {
+				opts.WriteDebug(fmt.Sprintf(`fetch digest for "%s"`, tagOrDigest), err)
+				return err
+			}
+		}
 
+		if err := manifestService.Delete(opts.Ctx, dgst); err != nil {
+			opts.WriteDebug(fmt.Sprintf(`delete digest "%s"`, dgst.String()), err)
+			return err
+		}
+	}
 	return nil
 }
 

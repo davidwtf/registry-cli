@@ -39,7 +39,7 @@
    ```
 
 ### tags
-### 列出所有tag
+### 列出所有 Tag, 返回：仓库名, Tag名, 适用平台, 资源大小, 创建时间, 资源类型, Digest
 
  | 参数 | 默认值 | 说明 |
  | - | - | - |
@@ -54,7 +54,7 @@
    ```
 
 ### inspect TAG_OR_DIGEST
-### 查看 tag 或 digest 详情，支持对 docker image 和 oci chart 做解析
+### 根据 tag 或 digest 查看 manifest 详情，支持对 docker image 和 oci chart 做解析
 
  | 参数 | 默认值 | 说明 |
  | - | - | - |
@@ -67,11 +67,12 @@
    ```
 
 ### del TAG_OR_DIGEST
-### 删除 tag 或 digest
+### 根据 tag 或 digest 删除 manifest
 
  | 参数 | 默认值 | 说明 |
  | - | - | - |
  | -r 或 --repository | | 仓库名 |
+ | --untag | false | 仅删除 tag，不删除对应的 manifest |
 
  注: 按 tag 删除是 docker registry 在 3.0 中新增的功能。
 

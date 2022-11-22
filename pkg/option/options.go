@@ -31,6 +31,7 @@ type Options struct {
 	AllRepos    bool
 	Insecure    bool
 	PlainHTTP   bool
+	Untag       bool
 	Parellel    int
 	StdErr      io.Writer
 	StdOut      io.Writer
