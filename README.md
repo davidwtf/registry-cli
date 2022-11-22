@@ -45,7 +45,7 @@
  | - | - | - |
  | -o 或 --output | text | 输出格式，选项：json text |
  | -r 或 --repository | | 仓库名 |
- | --all | | 查询所有仓库名 |
+ | --all | false | 查询所有仓库名 |
  | --parellel | 20 | 并行查询的线程数 |
 
 * 示例:
@@ -63,7 +63,7 @@
 
 * 示例:
    ```bash
-   registrycli inspect -s 127.0.0.1:5000 -r repo1
+   registrycli inspect v1.0 -s 127.0.0.1:5000 -r repo1
    ```
 
 ### del TAG_OR_DIGEST
@@ -86,8 +86,6 @@
  | 参数 | 默认值 | 说明 |
  | - | - | - |
  | -r 或 --repository | | 仓库名 |
-
- 注: 按 tag 删除是 docker registry 在 3.0 中新增的功能。
 
 * 示例:
    ```bash
