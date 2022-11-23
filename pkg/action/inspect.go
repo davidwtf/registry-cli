@@ -17,13 +17,16 @@ import (
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"helm.sh/helm/v3/pkg/chart"
-	"helm.sh/helm/v3/pkg/registry"
+)
+
+const (
+	HelmChartConfigMediaType = "application/vnd.cncf.helm.config.v1+json"
 )
 
 var AllSupportedConfigMediaTypes = []string{
 	schema2.MediaTypeImageConfig,
 	ocispec.MediaTypeImageConfig,
-	registry.ConfigMediaType,
+	HelmChartConfigMediaType,
 }
 
 func IsSupportedConfigMediaTypes(mediaType string) bool {
@@ -104,7 +107,7 @@ func (m *manifestOCI) Output(opts *option.Options) error {
 	return errors.ErrUnknownOutput
 }
 
-func Inspect(tagOrDigest string, opts *option.Options) error {
+func Inspect(opts *option.Options) error {
 	cli, err := client.NewClient(opts)
 	if err != nil {
 		opts.WriteDebug("init client", err)
@@ -124,24 +127,20 @@ func Inspect(tagOrDigest string, opts *option.Options) error {
 
 	var man distribution.Manifest
 
-	dgst := digest.Digest(tagOrDigest)
-	if dgst.Validate() == nil {
-		man, err = manifestService.Get(opts.Ctx, digest.Digest(tagOrDigest), registryclient.ReturnContentDigest(&dgst))
-		if err != nil {
-			return err
-		}
+	if opts.Tag != "" {
+		man, err = manifestService.Get(opts.Ctx, "", distribution.WithTag(opts.Tag), registryclient.ReturnContentDigest(&opts.Digest))
 	} else {
-		dgst = ""
-		man, err = manifestService.Get(opts.Ctx, "", distribution.WithTag(tagOrDigest), registryclient.ReturnContentDigest(&dgst))
-		if err != nil {
-			return err
-		}
+		man, err = manifestService.Get(opts.Ctx, opts.Digest)
+	}
+	if err != nil {
+		opts.WriteDebug("fetch manifest", err)
+		return err
 	}
 
 	switch realMan := man.(type) {
 	case *manifestlist.DeserializedManifestList:
 		m := manifestList{
-			Digest:                   dgst,
+			Digest:                   opts.Digest,
 			DeserializedManifestList: realMan,
 		}
 		for _, ref := range realMan.Manifests {
@@ -159,9 +158,9 @@ func Inspect(tagOrDigest string, opts *option.Options) error {
 		}
 		return m.Output(opts)
 	default:
-		o, err := getManifestForOutput(opts, repo, manifestService, man, dgst)
+		o, err := getManifestForOutput(opts, repo, manifestService, man, opts.Digest)
 		if err != nil {
-			opts.WriteDebug(fmt.Sprintf(`get manifest "%s" for output`, dgst), err)
+			opts.WriteDebug(fmt.Sprintf(`get manifest "%s" for output`, opts.Digest), err)
 			return err
 		}
 		return o.Output(opts)
@@ -190,7 +189,7 @@ func getManifestForOutput(opts *option.Options, repo distribution.Repository, ma
 				switch realMan.Config.MediaType {
 				case schema2.MediaTypeImageConfig, ocispec.MediaTypeImageConfig:
 					err = json.Unmarshal(config, &m.Image)
-				case registry.ConfigMediaType:
+				case HelmChartConfigMediaType:
 					err = json.Unmarshal(config, &m.Chart)
 				}
 				if err != nil {
@@ -216,7 +215,7 @@ func getManifestForOutput(opts *option.Options, repo distribution.Repository, ma
 				switch realMan.Config.MediaType {
 				case schema2.MediaTypeImageConfig, ocispec.MediaTypeImageConfig:
 					err = json.Unmarshal(config, &m.Image)
-				case registry.ConfigMediaType:
+				case HelmChartConfigMediaType:
 					err = json.Unmarshal(config, &m.Chart)
 				}
 				if err != nil {

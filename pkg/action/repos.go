@@ -51,7 +51,7 @@ func Repos(opts *option.Options) error {
 	}
 
 	if opts.Output == option.JSONOutput {
-		err = opts.Userdata.(*output.JSONArrayWriter).Finish()
+		err = w.Finish()
 	}
 
 	return err

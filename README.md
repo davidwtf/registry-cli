@@ -13,7 +13,6 @@
 ## 公共参数
  | 参数 | 默认值 | 说明 |
  | - | - | - |
- | -s 或 --server | | 镜像仓库服务器的地址 |
  | -u 或 --username | | 登录用户名 |
  | -p 或 --password | | 登录密码 |
  | --auth | | 使用认证auth登录，通常为 base64(username:password) |
@@ -33,9 +32,10 @@
  | - | - | - |
  | -o 或 --output | text | 输出格式，选项：json text |
 
+
 * 示例:
    ```bash
-   registrycli repos -s 127.0.0.1:5000
+   registrycli repos 127.0.0.1:5000
    ```
 
 ### tags
@@ -43,14 +43,16 @@
 
  | 参数 | 默认值 | 说明 |
  | - | - | - |
- | -o 或 --output | text | 输出格式，选项：json text |
- | -r 或 --repository | | 仓库名 |
- | --all | false | 查询所有仓库名 |
- | --parellel | 20 | 并行查询的线程数 |
+ | -o 或 --output | text | 输出格式，选项: json text |
+ | --sort | tag | 排序方式，选项: tag size created |
+ | --show-type | false | 以 text 格式输出时显示资源类型 |
+ | --show-digest | false | 以 text 格式输出时显示 Digest |
+ | --show-sum | true | 以 text 格式输出时，显示总量统计 |
+
 
 * 示例:
    ```bash
-   registrycli tags -s 127.0.0.1:5000 -r repo1
+   registrycli tags 127.0.0.1:5000/repo1
    ```
 
 ### inspect TAG_OR_DIGEST
@@ -59,11 +61,10 @@
  | 参数 | 默认值 | 说明 |
  | - | - | - |
  | -o 或 --output | text | 输出格式，选项：json text |
- | -r 或 --repository | | 仓库名 |
 
 * 示例:
    ```bash
-   registrycli inspect v1.0 -s 127.0.0.1:5000 -r repo1
+   registrycli inspect 127.0.0.1:5000/repo1:v1.0
    ```
 
 ### del TAG_OR_DIGEST
@@ -71,24 +72,21 @@
 
  | 参数 | 默认值 | 说明 |
  | - | - | - |
- | -r 或 --repository | | 仓库名 |
  | --untag | false | 仅删除 tag，不删除对应的 manifest |
 
  注: 按 tag 删除是 docker registry 在 3.0 中新增的功能。
 
 * 示例:
    ```bash
-   registrycli del sha256:74f5f150164eb49b3e6f621751a353dbfbc1dd114eb9b651ef8b1b4f5cc0c0d5 -s 127.0.0.1:5000 -r repo1
+   registrycli del 127.0.0.1:5000/repo1@sha256:74f5f150164eb49b3e6f621751a353dbfbc1dd114eb9b651ef8b1b4f5cc0c0d5
+   registrycli del 127.0.0.1:5000/repo1@sha256:v1
    ```
 
-### blob BLOB_ID
-### 下载 blob 内容
+### layer
+### 下载 layer 内容
 
- | 参数 | 默认值 | 说明 |
- | - | - | - |
- | -r 或 --repository | | 仓库名 |
 
 * 示例:
    ```bash
-   registrycli　blob sha256:275b2e73e3dc5cbf88c41ba15962045f0d36eeaf09dfe01f259ff2a12d3326af -s 127.0.0.1:5000 -r repo1
+   registrycli layer 127.0.0.1:5000/repo1@sha256:275b2e73e3dc5cbf88c41ba15962045f0d36eeaf09dfe01f259ff2a12d3326af
    ```

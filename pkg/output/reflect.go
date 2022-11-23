@@ -114,6 +114,7 @@ func reflectPrintMap(stdout io.Writer, name string, val reflect.Value, indent in
 func reflectPrintSimpleValue(stdout io.Writer, name string, val reflect.Value, indent int) error {
 	var err error
 	var valstr string
+	sizeFiled := strings.HasSuffix(strings.ToLower(name), "size")
 	switch val.Kind() {
 	case reflect.Bool:
 		valstr = strconv.FormatBool(val.Bool())
@@ -124,9 +125,17 @@ func reflectPrintSimpleValue(stdout io.Writer, name string, val reflect.Value, i
 	case reflect.Float64:
 		valstr = strconv.FormatFloat(val.Float(), 'g', 8, 64)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		valstr = strconv.FormatUint(val.Uint(), 10)
+		if sizeFiled {
+			valstr = customSize("%.4g%s", float64(val.Uint()), 1024.0, binaryAbbrs)
+		} else {
+			valstr = strconv.FormatUint(val.Uint(), 10)
+		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		valstr = strconv.FormatInt(val.Int(), 10)
+		if sizeFiled {
+			valstr = customSize("%.4g%s", float64(val.Int()), 1024.0, binaryAbbrs)
+		} else {
+			valstr = strconv.FormatInt(val.Int(), 10)
+		}
 	case reflect.Complex64:
 		valstr = strconv.FormatComplex(val.Complex(), 'g', 8, 64)
 	case reflect.Complex128:

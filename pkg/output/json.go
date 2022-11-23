@@ -60,7 +60,7 @@ func WriteJSON(stdout io.Writer, obj interface{}) error {
 		stdout = os.Stdout
 	}
 	if stdout == nil {
-		return errors.ErrNeedRegistry
+		return errors.ErrNeedStdOut
 	}
 	encoder := json.NewEncoder(stdout)
 	encoder.SetIndent("", "    ")

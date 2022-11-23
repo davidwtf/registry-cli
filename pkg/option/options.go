@@ -5,17 +5,30 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/docker/distribution/reference"
+	"github.com/opencontainers/go-digest"
 )
 
 const (
 	TextOutput = "text"
 	JSONOutput = "json"
+
+	SortByTag     = "tag"
+	SortBySize    = "size"
+	SortByCreated = "created"
 )
 
 var (
 	AllOutputFormats = []string{
 		TextOutput,
 		JSONOutput,
+	}
+
+	AllSortMethods = []string{
+		SortByTag,
+		SortBySize,
+		SortByCreated,
 	}
 )
 
@@ -25,10 +38,15 @@ type Options struct {
 	Auth        string
 	Server      string
 	Repositiory string
+	Tag         string
+	Digest      digest.Digest
 	Output      string
+	Sort        string
 	Destination string
 	Debug       bool
-	AllRepos    bool
+	ShowType    bool
+	ShowDigest  bool
+	ShowSum     bool
 	Insecure    bool
 	PlainHTTP   bool
 	Untag       bool
@@ -36,10 +54,26 @@ type Options struct {
 	StdErr      io.Writer
 	StdOut      io.Writer
 	Ctx         context.Context
-	Userdata    interface{}
 }
 
-func (opts *Options) IsSupportOutput(supports ...string) bool {
+func (opts *Options) ParseReference(ref string) error {
+	named, err := reference.ParseDockerRef(ref)
+	if err != nil {
+		return fmt.Errorf(`parse image reference "%s" error: %v`, ref, err)
+	}
+	opts.Server = reference.Domain(named)
+	opts.Repositiory = reference.Path(named)
+	if namedTaged, ok := named.(reference.NamedTagged); ok {
+		opts.Tag = namedTaged.Tag()
+	}
+	if canonical, ok := named.(reference.Canonical); ok {
+		opts.Digest = canonical.Digest()
+	}
+
+	return nil
+}
+
+func (opts *Options) IsSupportedOutput(supports ...string) bool {
 	if opts == nil {
 		return false
 	}
@@ -48,6 +82,21 @@ func (opts *Options) IsSupportOutput(supports ...string) bool {
 	}
 	for _, o := range supports {
 		if o == opts.Output {
+			return true
+		}
+	}
+	return false
+}
+
+func (opts *Options) IsSupportedSort(supports ...string) bool {
+	if opts == nil {
+		return false
+	}
+	if supports == nil {
+		supports = AllSortMethods
+	}
+	for _, o := range supports {
+		if o == opts.Sort {
 			return true
 		}
 	}

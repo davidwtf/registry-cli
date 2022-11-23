@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/url"
 	"registry-cli/pkg/action"
 	"registry-cli/pkg/errors"
 	"registry-cli/pkg/option"
@@ -10,24 +11,40 @@ import (
 
 func reposCmd(opts *option.Options) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "repos",
+		Use:     "repos REGISTRY_ADDRESS",
 		Short:   "list all repository names",
-		Example: `  registrycli repos -s 127.0.0.1:5000`,
+		Example: `  registrycli repos 127.0.0.1:5000`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 0 {
+			if len(args) < 1 {
+				return errors.ErrNeedImageReference
+			}
+			if len(args) > 1 {
 				return errors.ErrTooManyArgs
 			}
 
-			if !opts.IsSupportOutput() {
+			if !opts.IsSupportedOutput() {
 				return errors.ErrUnknownOutput
 			}
+
+			if !checkServer(args[0]) {
+				return errors.ErrWrongRegistryAddress
+			}
+
+			opts.Server = args[0]
 
 			setDefaultOpts(opts, cmd)
 
 			return action.Repos(opts)
 		},
 	}
-	addOutputOpt(cmd, opts)
-
+	cmd.Flags().StringVarP(&opts.Output, "output", "o", option.TextOutput, "output format, options: json text")
 	return cmd
+}
+
+func checkServer(s string) bool {
+	r, err := url.ParseRequestURI("https://" + s)
+	if err != nil {
+		return false
+	}
+	return r.Host == s
 }

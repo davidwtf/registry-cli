@@ -7,12 +7,9 @@ import (
 	"path/filepath"
 	"registry-cli/pkg/client"
 	"registry-cli/pkg/option"
-	"strings"
-
-	"github.com/opencontainers/go-digest"
 )
 
-func Blob(blobID string, opts *option.Options) error {
+func Layer(opts *option.Options) error {
 	cli, err := client.NewClient(opts)
 	if err != nil {
 		opts.WriteDebug("init client", err)
@@ -24,16 +21,7 @@ func Blob(blobID string, opts *option.Options) error {
 		return err
 	}
 
-	if !strings.HasPrefix(blobID, "sha256:") {
-		blobID = "sha256:" + blobID
-	}
-	dgst := digest.Digest(blobID)
-	if err := dgst.Validate(); err != nil {
-		opts.WriteDebug(fmt.Sprintf(`validate blob digest "%s"`, dgst.String()), err)
-		return err
-	}
-
-	reader, err := repo.Blobs(opts.Ctx).Open(opts.Ctx, dgst)
+	reader, err := repo.Blobs(opts.Ctx).Open(opts.Ctx, opts.Digest)
 	if err != nil {
 		opts.WriteDebug("open blob", err)
 		return err
@@ -58,7 +46,7 @@ func Blob(blobID string, opts *option.Options) error {
 		}
 	}
 
-	fn := filepath.Join(dst, blobID)
+	fn := filepath.Join(dst, opts.Digest.String())
 	writer, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY, os.FileMode(0640))
 	if err != nil {
 		opts.WriteDebug(fmt.Sprintf(`create "%s"`, fn), err)
@@ -69,7 +57,7 @@ func Blob(blobID string, opts *option.Options) error {
 
 	n, err := io.Copy(writer, reader)
 	if err != nil {
-		opts.WriteDebug(fmt.Sprintf(`copy blob "%s" to file "%s"`, blobID, fn), err)
+		opts.WriteDebug(fmt.Sprintf(`copy layer "%s" to file "%s"`, opts.Digest, fn), err)
 		return err
 	}
 	opts.WriteDebug(fmt.Sprintf(`write "%s" %d bytes`, fn, n), nil)

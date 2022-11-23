@@ -7,6 +7,7 @@ import (
 	"registry-cli/pkg/errors"
 	"registry-cli/pkg/option"
 	"registry-cli/pkg/output"
+	"sort"
 	"sync"
 	"time"
 
@@ -30,126 +31,207 @@ type tagInfo struct {
 	Digest     string     `json:"digest"`
 }
 
-func (t tagInfo) Header() []string {
-	return []string{"REPOSITORY", "TAG", "PLATFORM", "SIZE", "CREATED", "TYPE", "DIGEST"}
+func (t tagInfo) Header(opts *option.Options) []string {
+	headers := []string{"REPOSITORY", "TAG", "PLATFORM", "SIZE", "CREATED"}
+	if opts.ShowType {
+		headers = append(headers, "TYPE")
+	}
+	if opts.ShowDigest {
+		headers = append(headers, "DIGEST")
+	}
+	return headers
 }
 
-func (t *tagInfo) Output(opts *option.Options) error {
-	switch opts.Output {
-	case option.JSONOutput:
-		return opts.Userdata.(*output.JSONArrayWriter).Write(t)
-	case option.TextOutput:
-		return opts.Userdata.(*output.TextWriter).Write(
-			t.Repoistory, t.Tag, t.Platform,
-			output.SizeToShow(t.Size), output.TimeToShow(t.Created),
-			t.Type, t.Digest)
+func (t *tagInfo) Column(opts *option.Options) []string {
+	col := []string{
+		t.Repoistory, t.Tag, t.Platform,
+		output.SizeToShow(t.Size), output.TimeToShow(t.Created),
 	}
-	return errors.ErrUnknownOutput
+	if opts.ShowType {
+		col = append(col, t.Type)
+	}
+	if opts.ShowDigest {
+		col = append(col, t.Digest)
+	}
+	return col
 }
 
 func Tags(opts *option.Options) error {
-	var err error
-	switch opts.Output {
-	case option.JSONOutput:
-		opts.Userdata, err = output.NewJSONArrayWriter(opts.StdOut)
-	case option.TextOutput:
-		opts.Userdata, err = output.NewTextWriter(opts.StdOut, tagInfo{}.Header()...)
-	default:
-		return errors.ErrUnknownOutput
-	}
-	if err != nil {
-		opts.WriteDebug("init output", err)
-		return err
-	}
-
 	cli, err := client.NewClient(opts)
 	if err != nil {
 		opts.WriteDebug("init client", err)
 		return err
 	}
 
-	if opts.AllRepos {
-		registry, err := cli.NewRegistry()
-		if err != nil {
-			opts.WriteDebug("init registry service", err)
-			return err
-		}
-
-		if err := cli.WalkAllRepos(opts.Ctx, registry, func(repo string) (stop bool, err error) {
-			err = fetchRepoTags(opts, cli, repo)
-			if err != nil {
-				return true, err
-			}
-			return false, nil
-		}); err != nil {
-			opts.WriteDebug("walk through all repoistories", err)
-			return err
-		}
-	} else {
-		err := fetchRepoTags(opts, cli, opts.Repositiory)
-		if err != nil {
-			return err
-		}
+	tags, err := getTags(opts, cli)
+	if err != nil {
+		opts.WriteDebug("get tags", err)
+		return err
 	}
 
-	if opts.Output == option.JSONOutput {
-		err = opts.Userdata.(*output.JSONArrayWriter).Finish()
+	if err := outputTags(opts, tags); err != nil {
+		opts.WriteDebug("output tags", err)
+		return err
 	}
 
-	return err
+	return nil
 }
 
-func fetchRepoTags(opts *option.Options, cli *client.Client, repoName string) error {
-	repo, err := cli.NewRepository(repoName, client.PullAction)
+func outputTags(opts *option.Options, tags []tagInfo) error {
+	switch opts.Sort {
+	case option.SortByTag:
+		sort.SliceStable(tags, func(i, j int) bool {
+			return tags[i].Tag < tags[j].Tag
+		})
+	case option.SortBySize:
+		sort.SliceStable(tags, func(i, j int) bool {
+			if tags[i].Size == nil {
+				return true
+			}
+			if tags[j].Size == nil {
+				return false
+			}
+			return (*tags[i].Size) < (*tags[j].Size)
+		})
+	case option.SortByCreated:
+		sort.SliceStable(tags, func(i, j int) bool {
+			if tags[i].Created == nil {
+				return true
+			}
+			if tags[j].Created == nil {
+				return false
+			}
+			return (*tags[i].Created).Before(*tags[j].Created)
+		})
+	default:
+		return errors.ErrUnknownSort
+	}
+
+	switch opts.Output {
+	case option.JSONOutput:
+		w, err := output.NewJSONArrayWriter(opts.StdOut)
+		if err != nil {
+			return err
+		}
+		for _, tag := range tags {
+			if err := w.Write(tag); err != nil {
+				return err
+			}
+		}
+		return w.Finish()
+	case option.TextOutput:
+		w, err := output.NewTextWriter(opts.StdOut, tagInfo{}.Header(opts)...)
+		if err != nil {
+			return err
+		}
+
+		sum := struct {
+			TotalNumber int
+			TotalSize   int64
+		}{}
+
+		for _, tag := range tags {
+			if tag.Size != nil {
+				sum.TotalSize += *tag.Size
+			}
+			sum.TotalNumber++
+			if err := w.Write(tag.Column(opts)...); err != nil {
+				return err
+			}
+		}
+		if err := w.Flush(); err != nil {
+			return err
+		}
+		if opts.ShowSum {
+			if _, err := fmt.Fprintln(opts.StdOut); err != nil {
+				return err
+			}
+			if err := output.PrintStruct(opts.StdOut, sum); err != nil {
+				return err
+			}
+		}
+	default:
+		return errors.ErrUnknownOutput
+	}
+	return nil
+}
+
+func getTags(opts *option.Options, cli *client.Client) ([]tagInfo, error) {
+	repo, err := cli.NewRepository(opts.Repositiory, client.PullAction)
 	if err != nil {
 		opts.WriteDebug("init repository service", err)
-		return err
+		return nil, err
 	}
 
 	mainifestService, err := repo.Manifests(opts.Ctx)
 	if err != nil {
 		opts.WriteDebug("init manifest service", err)
-		return err
+		return nil, err
 	}
+
 	tags, err := repo.Tags(opts.Ctx).All(opts.Ctx)
 	if err != nil {
-		return err
+		opts.WriteDebug("get all tags", err)
+		return nil, err
 	}
-	if opts.Parellel > 0 && len(tags) > 1 {
-		numParellel := opts.Parellel
-		if numParellel > len(tags) {
-			numParellel = len(tags)
-		}
-		ch := make(chan string)
-		stop := make(chan bool)
-		wg := sync.WaitGroup{}
-		wg.Add(len(tags))
-		for i := 0; i < numParellel; i++ {
-			go fetchWorker(opts, repo, mainifestService, repoName, &wg, ch, stop)
-		}
 
-		for _, tag := range tags {
-			ch <- tag
-		}
-		wg.Wait()
-		close(stop)
-	} else {
-		for _, tag := range tags {
-			if err := fetchTagInfo(opts, repo, mainifestService, repoName, tag); err != nil {
-				opts.WriteDebug(fmt.Sprintf(`fetch gat info for "%s:%s"`, repoName, tag), err)
-				continue
-			}
-		}
+	numParellel := opts.Parellel
+	if numParellel > len(tags) {
+		numParellel = len(tags)
 	}
-	return nil
+	inputCh := make(chan string)
+	stop := make(chan bool)
+	wg := sync.WaitGroup{}
+	wg.Add(len(tags))
+
+	var tagInfos []tagInfo
+	resultCh := make(chan tagInfo)
+	for i := 0; i < numParellel; i++ {
+		go fetchWorker(opts, repo, mainifestService, &wg, inputCh, resultCh, stop)
+	}
+	go func() {
+		for _, tag := range tags {
+			inputCh <- tag
+		}
+	}()
+	go collector(&tagInfos, resultCh, stop)
+
+	wg.Wait()
+	close(stop)
+
+	return tagInfos, nil
 }
 
-func fetchWorker(opts *option.Options, repo distribution.Repository, mainifestService distribution.ManifestService, repoName string, wg *sync.WaitGroup, ch <-chan string, stop <-chan bool) {
+func collector(result *[]tagInfo, resultCh <-chan tagInfo, stop <-chan bool) {
 	for {
 		select {
-		case tag := <-ch:
-			if err := fetchTagInfo(opts, repo, mainifestService, repoName, tag); err != nil {
-				opts.WriteDebug(fmt.Sprintf(`fetch gat info for "%s:%s"`, repoName, tag), err)
+		case info := <-resultCh:
+			*result = append(*result, info)
+		case <-stop:
+			return
+		}
+	}
+}
+
+func fetchWorker(
+	opts *option.Options,
+	repo distribution.Repository,
+	mainifestService distribution.ManifestService,
+	wg *sync.WaitGroup,
+	inputCh <-chan string,
+	resultCh chan<- tagInfo,
+	stop <-chan bool) {
+
+	for {
+		select {
+		case tag := <-inputCh:
+			infos, err := fetchTagInfos(opts, repo, mainifestService, tag)
+			if err != nil {
+				opts.WriteDebug(fmt.Sprintf(`fetch get info for "%s"`, tag), err)
+			} else {
+				for _, info := range infos {
+					resultCh <- *info
+				}
 			}
 			wg.Done()
 		case <-stop:
@@ -158,45 +240,47 @@ func fetchWorker(opts *option.Options, repo distribution.Repository, mainifestSe
 	}
 }
 
-func fetchTagInfo(opts *option.Options, repo distribution.Repository, mainifestService distribution.ManifestService, repoName, tag string) error {
+func fetchTagInfos(
+	opts *option.Options,
+	repo distribution.Repository,
+	mainifestService distribution.ManifestService,
+	tag string) ([]*tagInfo, error) {
+
 	var dgst digest.Digest
 	man, err := mainifestService.Get(opts.Ctx, "", distribution.WithTag(tag), registryclient.ReturnContentDigest(&dgst))
 	if err != nil {
 		opts.WriteDebug(fmt.Sprintf(`get manifest for "%s"`, tag), err)
-		return err
+		return nil, err
 	}
+	var r []*tagInfo
 	switch realMan := man.(type) {
 	case *manifestlist.DeserializedManifestList:
 		for _, ref := range realMan.Manifests {
 			man, err := mainifestService.Get(opts.Ctx, ref.Digest, registryclient.ReturnContentDigest(&dgst))
 			if err != nil {
 				opts.WriteDebug(fmt.Sprintf(`get manifest for list "%s"'s "%s"`, tag, ref.Digest), err)
-				return err
+				return nil, err
 			}
 			info, err := getManifestInfo(opts, repo, man)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			info.Repoistory = repoName
+			info.Repoistory = opts.Repositiory
 			info.Tag = tag
 			info.Digest = dgst.String()
-			if err := info.Output(opts); err != nil {
-				return err
-			}
+			r = append(r, info)
 		}
 	default:
 		info, err := getManifestInfo(opts, repo, man)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		info.Repoistory = repoName
+		info.Repoistory = opts.Repositiory
 		info.Tag = tag
 		info.Digest = dgst.String()
-		if err := info.Output(opts); err != nil {
-			return err
-		}
+		r = append(r, info)
 	}
-	return nil
+	return r, nil
 }
 
 func getManifestInfo(opts *option.Options, repo distribution.Repository, manifest distribution.Manifest) (*tagInfo, error) {

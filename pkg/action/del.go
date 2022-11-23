@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"net/http"
 	"registry-cli/pkg/client"
+	"registry-cli/pkg/errors"
 	"registry-cli/pkg/option"
 
 	registryclient "github.com/distribution/distribution/registry/client"
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/reference"
 	registryapiv2 "github.com/docker/distribution/registry/api/v2"
-	"github.com/opencontainers/go-digest"
 )
 
-func Del(tagOrDigest string, opts *option.Options) error {
+func Del(opts *option.Options) error {
 	cli, err := client.NewClient(opts)
 	if err != nil {
 		opts.WriteDebug("init client", err)
@@ -26,16 +26,13 @@ func Del(tagOrDigest string, opts *option.Options) error {
 		opts.WriteDebug("init repository service", err)
 		return err
 	}
-
-	dgst := digest.Digest(tagOrDigest)
-
 	if opts.Untag {
-		if dgst.Validate() == nil {
-			opts.WriteDebug("need a tag not digest", nil)
-			return fmt.Errorf(`need a tag not digest: "%s"`, tagOrDigest)
+		if opts.Tag == "" {
+			opts.WriteDebug("need a tag", nil)
+			return errors.ErrNeedTag
 		}
-		if err := untag(opts.Ctx, cli, repo, tagOrDigest); err != nil {
-			opts.WriteDebug(fmt.Sprintf(`untag "%s"`, tagOrDigest), err)
+		if err := untag(opts.Ctx, cli, repo, opts.Tag); err != nil {
+			opts.WriteDebug(fmt.Sprintf(`untag "%s"`, opts.Tag), err)
 			return err
 		}
 	} else {
@@ -44,16 +41,16 @@ func Del(tagOrDigest string, opts *option.Options) error {
 			opts.WriteDebug("init mainifest service", err)
 			return err
 		}
-		if dgst.Validate() != nil {
-			_, err = manifestService.Get(opts.Ctx, "", distribution.WithTag(tagOrDigest), registryclient.ReturnContentDigest(&dgst))
+		if opts.Tag != "" {
+			_, err = manifestService.Get(opts.Ctx, "", distribution.WithTag(opts.Tag), registryclient.ReturnContentDigest(&opts.Digest))
 			if err != nil {
-				opts.WriteDebug(fmt.Sprintf(`fetch digest for "%s"`, tagOrDigest), err)
+				opts.WriteDebug(fmt.Sprintf(`fetch digest for "%s"`, opts.Tag), err)
 				return err
 			}
 		}
 
-		if err := manifestService.Delete(opts.Ctx, dgst); err != nil {
-			opts.WriteDebug(fmt.Sprintf(`delete digest "%s"`, dgst.String()), err)
+		if err := manifestService.Delete(opts.Ctx, opts.Digest); err != nil {
+			opts.WriteDebug(fmt.Sprintf(`delete digest "%s"`, opts.Digest), err)
 			return err
 		}
 	}

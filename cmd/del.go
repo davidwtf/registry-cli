@@ -10,24 +10,26 @@ import (
 
 func delCmd(opts *option.Options) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "del TAG_OR_DIGEST",
+		Use:     "del IMAGE_REF",
 		Short:   "delete the manifest",
-		Example: `  registrycli del v1.0 -s 127.0.0.1:5000 -r repo1`,
+		Example: `  registrycli del 127.0.0.1:5000/repo1:v1.0`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 1 {
-				return errors.ErrNeedTagOrManifest
+			if len(args) < 1 {
+				return errors.ErrNeedImageReference
+			}
+			if len(args) > 1 {
+				return errors.ErrTooManyArgs
 			}
 
-			if err := needRepo(opts); err != nil {
+			if err := opts.ParseReference(args[0]); err != nil {
 				return err
 			}
 
 			setDefaultOpts(opts, cmd)
 
-			return action.Del(args[0], opts)
+			return action.Del(opts)
 		},
 	}
-	addRepoOpt(cmd, opts)
 	cmd.Flags().BoolVar(&opts.Untag, "untag", false, "untag the tag")
 	return cmd
 }

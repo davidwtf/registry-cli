@@ -10,22 +10,27 @@ import (
 
 func tagsCmd(opts *option.Options) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "tags",
+		Use:     "tags REPO_REF",
 		Short:   "list tags",
-		Example: `  registrycli tags -s 127.0.0.1:5000 -r repo1`,
+		Example: `  registrycli tags 127.0.0.1:5000/repo1`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 0 {
+			if len(args) < 1 {
+				return errors.ErrNeedImageReference
+			}
+			if len(args) > 1 {
 				return errors.ErrTooManyArgs
 			}
 
-			if opts.AllRepos {
-				if opts.Repositiory != "" {
-					return errors.ErrConflictAllRepo
-				}
-			} else {
-				if err := needRepo(opts); err != nil {
-					return err
-				}
+			if !opts.IsSupportedOutput() {
+				return errors.ErrUnknownOutput
+			}
+
+			if !opts.IsSupportedSort() {
+				return errors.ErrUnknownSort
+			}
+
+			if err := opts.ParseReference(args[0]); err != nil {
+				return err
 			}
 
 			setDefaultOpts(opts, cmd)
@@ -33,9 +38,10 @@ func tagsCmd(opts *option.Options) *cobra.Command {
 			return action.Tags(opts)
 		},
 	}
-	addRepoOpt(cmd, opts)
-	addOutputOpt(cmd, opts)
-	cmd.Flags().BoolVar(&opts.AllRepos, "all", false, "show all repositories")
-	cmd.Flags().IntVar(&opts.Parellel, "parellel", 20, "workers to fetch tags in parallel, set it to 0 to fetch tags serially")
+	cmd.Flags().StringVarP(&opts.Output, "output", "o", option.TextOutput, "output format, options: json text")
+	cmd.Flags().BoolVar(&opts.ShowType, "show-type", false, "show media type when output with text format")
+	cmd.Flags().BoolVar(&opts.ShowDigest, "show-digest", false, "show digest when output with text format")
+	cmd.Flags().BoolVar(&opts.ShowSum, "show-sum", true, "show summary when output with text format")
+	cmd.Flags().StringVar(&opts.Sort, "sort", "tag", "sort method, options: tag size created")
 	return cmd
 }
