@@ -41,7 +41,7 @@ func tagsCmd(opts *option.Options) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Output, "output", "o", option.TextOutput, "output format, options: json text")
 	cmd.Flags().BoolVar(&opts.ShowType, "show-type", false, "show media type when output with text format")
 	cmd.Flags().BoolVar(&opts.ShowDigest, "show-digest", false, "show digest when output with text format")
-	cmd.Flags().BoolVar(&opts.ShowSum, "show-sum", true, "show summary when output with text format")
+	cmd.Flags().BoolVar(&opts.ShowSummary, "show-summary", true, "show summary when output with text format")
 	cmd.Flags().StringVar(&opts.Sort, "sort", "tag", "sort method, options: tag size created")
 	return cmd
 }

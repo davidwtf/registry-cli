@@ -46,7 +46,7 @@ type Options struct {
 	Debug       bool
 	ShowType    bool
 	ShowDigest  bool
-	ShowSum     bool
+	ShowSummary bool
 	Insecure    bool
 	PlainHTTP   bool
 	Untag       bool

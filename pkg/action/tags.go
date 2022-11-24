@@ -22,17 +22,16 @@ import (
 )
 
 type tagInfo struct {
-	Repoistory string     `json:"repository"`
-	Tag        string     `json:"tag"`
-	Platform   string     `json:"platform"`
-	Size       *int64     `json:"size"`
-	Created    *time.Time `json:"created"`
-	Type       string     `json:"type"`
-	Digest     string     `json:"digest"`
+	Tag      string     `json:"tag"`
+	Platform string     `json:"platform"`
+	Size     *int64     `json:"size"`
+	Created  *time.Time `json:"created"`
+	Type     string     `json:"type"`
+	Digest   string     `json:"digest"`
 }
 
 func (t tagInfo) Header(opts *option.Options) []string {
-	headers := []string{"REPOSITORY", "TAG", "PLATFORM", "SIZE", "CREATED"}
+	headers := []string{"TAG", "PLATFORM", "SIZE", "CREATED"}
 	if opts.ShowType {
 		headers = append(headers, "TYPE")
 	}
@@ -44,7 +43,7 @@ func (t tagInfo) Header(opts *option.Options) []string {
 
 func (t *tagInfo) Column(opts *option.Options) []string {
 	col := []string{
-		t.Repoistory, t.Tag, t.Platform,
+		t.Tag, t.Platform,
 		output.SizeToShow(t.Size), output.TimeToShow(t.Created),
 	}
 	if opts.ShowType {
@@ -56,6 +55,27 @@ func (t *tagInfo) Column(opts *option.Options) []string {
 	return col
 }
 
+type sum struct {
+	Tags      int   `json:"tags"`
+	Manfiests int   `json:"manifests"`
+	Size      int64 `json:"size"`
+}
+
+type summary struct {
+	Sum       sum             `json:"sum"`
+	Platforms map[string]*sum `json:"platforms"`
+}
+
+type repoSummary struct {
+	Repository string  `json:"repository"`
+	Summary    summary `json:"summary"`
+}
+
+type repoInfo struct {
+	repoSummary
+	Tags []tagInfo `json:"tags"`
+}
+
 func Tags(opts *option.Options) error {
 	cli, err := client.NewClient(opts)
 	if err != nil {
@@ -63,13 +83,13 @@ func Tags(opts *option.Options) error {
 		return err
 	}
 
-	tags, err := getTags(opts, cli)
+	n, tags, err := getTags(opts, cli)
 	if err != nil {
 		opts.WriteDebug("get tags", err)
 		return err
 	}
 
-	if err := outputTags(opts, tags); err != nil {
+	if err := outputTags(opts, n, tags); err != nil {
 		opts.WriteDebug("output tags", err)
 		return err
 	}
@@ -77,7 +97,7 @@ func Tags(opts *option.Options) error {
 	return nil
 }
 
-func outputTags(opts *option.Options, tags []tagInfo) error {
+func outputTags(opts *option.Options, num int, tags []tagInfo) error {
 	switch opts.Sort {
 	case option.SortByTag:
 		sort.SliceStable(tags, func(i, j int) bool {
@@ -107,34 +127,46 @@ func outputTags(opts *option.Options, tags []tagInfo) error {
 		return errors.ErrUnknownSort
 	}
 
+	repoInfo := repoInfo{
+		repoSummary: repoSummary{
+			Repository: opts.Repositiory,
+			Summary: summary{
+				Platforms: map[string]*sum{},
+				Sum: sum{
+					Tags: num,
+				},
+			},
+		},
+		Tags: tags,
+	}
+
+	for _, tag := range tags {
+		size := int64(0)
+		if tag.Size != nil {
+			size = *tag.Size
+		}
+		repoInfo.Summary.Sum.Size += size
+		repoInfo.Summary.Sum.Manfiests++
+		if repoInfo.Summary.Platforms[tag.Platform] == nil {
+			repoInfo.Summary.Platforms[tag.Platform] = &sum{}
+		}
+		repoInfo.Summary.Platforms[tag.Platform].Size += size
+		repoInfo.Summary.Platforms[tag.Platform].Manfiests++
+		repoInfo.Summary.Platforms[tag.Platform].Tags++
+	}
+
 	switch opts.Output {
 	case option.JSONOutput:
-		w, err := output.NewJSONArrayWriter(opts.StdOut)
-		if err != nil {
+		if err := output.WriteJSON(opts.StdOut, repoInfo); err != nil {
 			return err
 		}
-		for _, tag := range tags {
-			if err := w.Write(tag); err != nil {
-				return err
-			}
-		}
-		return w.Finish()
 	case option.TextOutput:
 		w, err := output.NewTextWriter(opts.StdOut, tagInfo{}.Header(opts)...)
 		if err != nil {
 			return err
 		}
 
-		sum := struct {
-			TotalNumber int
-			TotalSize   int64
-		}{}
-
 		for _, tag := range tags {
-			if tag.Size != nil {
-				sum.TotalSize += *tag.Size
-			}
-			sum.TotalNumber++
 			if err := w.Write(tag.Column(opts)...); err != nil {
 				return err
 			}
@@ -142,11 +174,12 @@ func outputTags(opts *option.Options, tags []tagInfo) error {
 		if err := w.Flush(); err != nil {
 			return err
 		}
-		if opts.ShowSum {
+
+		if opts.ShowSummary {
 			if _, err := fmt.Fprintln(opts.StdOut); err != nil {
 				return err
 			}
-			if err := output.PrintStruct(opts.StdOut, sum); err != nil {
+			if err := output.PrintStruct(opts.StdOut, repoInfo.repoSummary); err != nil {
 				return err
 			}
 		}
@@ -156,23 +189,23 @@ func outputTags(opts *option.Options, tags []tagInfo) error {
 	return nil
 }
 
-func getTags(opts *option.Options, cli *client.Client) ([]tagInfo, error) {
+func getTags(opts *option.Options, cli *client.Client) (int, []tagInfo, error) {
 	repo, err := cli.NewRepository(opts.Repositiory, client.PullAction)
 	if err != nil {
 		opts.WriteDebug("init repository service", err)
-		return nil, err
+		return 0, nil, err
 	}
 
 	mainifestService, err := repo.Manifests(opts.Ctx)
 	if err != nil {
 		opts.WriteDebug("init manifest service", err)
-		return nil, err
+		return 0, nil, err
 	}
 
 	tags, err := repo.Tags(opts.Ctx).All(opts.Ctx)
 	if err != nil {
 		opts.WriteDebug("get all tags", err)
-		return nil, err
+		return 0, nil, err
 	}
 
 	numParellel := opts.Parellel
@@ -199,7 +232,7 @@ func getTags(opts *option.Options, cli *client.Client) ([]tagInfo, error) {
 	wg.Wait()
 	close(stop)
 
-	return tagInfos, nil
+	return len(tags), tagInfos, nil
 }
 
 func collector(result *[]tagInfo, resultCh <-chan tagInfo, stop <-chan bool) {
@@ -265,7 +298,6 @@ func fetchTagInfos(
 			if err != nil {
 				return nil, err
 			}
-			info.Repoistory = opts.Repositiory
 			info.Tag = tag
 			info.Digest = dgst.String()
 			r = append(r, info)
@@ -275,7 +307,6 @@ func fetchTagInfos(
 		if err != nil {
 			return nil, err
 		}
-		info.Repoistory = opts.Repositiory
 		info.Tag = tag
 		info.Digest = dgst.String()
 		r = append(r, info)

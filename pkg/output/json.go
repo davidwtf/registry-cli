@@ -63,7 +63,7 @@ func WriteJSON(stdout io.Writer, obj interface{}) error {
 		return errors.ErrNeedStdOut
 	}
 	encoder := json.NewEncoder(stdout)
-	encoder.SetIndent("", "    ")
+	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(obj); err != nil {
 		return err
 	}

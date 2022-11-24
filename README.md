@@ -39,7 +39,7 @@
    ```
 
 ### tags
-### 列出所有 Tag, 返回：仓库名, Tag名, 适用平台, 资源大小, 创建时间, 资源类型, Digest
+### 列出所有 Tag, 返回: Tag名, 适用平台, 资源大小, 创建时间, 资源类型, Digest
 
  | 参数 | 默认值 | 说明 |
  | - | - | - |
@@ -47,7 +47,7 @@
  | --sort | tag | 排序方式，选项: tag size created |
  | --show-type | false | 以 text 格式输出时显示资源类型 |
  | --show-digest | false | 以 text 格式输出时显示 Digest |
- | --show-sum | true | 以 text 格式输出时，显示总量统计 |
+ | --show-summary | true | 显示总量统计 |
 
 
 * 示例:
