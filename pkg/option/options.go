@@ -50,7 +50,6 @@ type Options struct {
 	Insecure    bool
 	PlainHTTP   bool
 	Untag       bool
-	Parellel    int
 	StdErr      io.Writer
 	StdOut      io.Writer
 	Ctx         context.Context

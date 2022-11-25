@@ -170,65 +170,56 @@ func Inspect(opts *option.Options) error {
 func getManifestForOutput(opts *option.Options, repo distribution.Repository, manifestService distribution.ManifestService, man distribution.Manifest, dgst digest.Digest) (manifestOutput, error) {
 	switch realMan := man.(type) {
 	case *schema1.SignedManifest:
-		m := &manifestV1{
+		return &manifestV1{
 			Digest:         dgst,
 			SignedManifest: realMan,
-		}
-		return m, nil
+		}, nil
 	case *schema2.DeserializedManifest:
-		m := &manifestV2{
+		image, chart, err := parseConfig(opts, repo, realMan.Config.MediaType, realMan.Config.Digest)
+		if err != nil {
+			return nil, err
+		}
+		return &manifestV2{
 			Digest:               dgst,
 			DeserializedManifest: realMan,
-		}
-		if IsSupportedConfigMediaTypes(realMan.Config.MediaType) {
-			config, err := repo.Blobs(opts.Ctx).Get(opts.Ctx, realMan.Config.Digest)
-			if err != nil {
-				opts.WriteDebug(fmt.Sprintf(`get config for "%s"`, realMan.Config.Digest), err)
-			} else {
-				var err error
-				switch realMan.Config.MediaType {
-				case schema2.MediaTypeImageConfig, ocispec.MediaTypeImageConfig:
-					err = json.Unmarshal(config, &m.Image)
-				case HelmChartConfigMediaType:
-					err = json.Unmarshal(config, &m.Chart)
-				}
-				if err != nil {
-					opts.WriteDebug(fmt.Sprintf(`unmarshal config for "%s"`, realMan.Config.Digest), err)
-				}
-			}
-		} else {
-			opts.WriteDebug(fmt.Sprintf(`unsupported media type "%s"`, realMan.Config.MediaType), nil)
-		}
-
-		return m, nil
+			Image:                image,
+			Chart:                chart,
+		}, nil
 	case *ocischema.DeserializedManifest:
-		m := manifestOCI{
+		image, chart, err := parseConfig(opts, repo, realMan.Config.MediaType, realMan.Config.Digest)
+		if err != nil {
+			return nil, err
+		}
+		return &manifestOCI{
 			Digest:               dgst,
 			DeserializedManifest: realMan,
-		}
-		if IsSupportedConfigMediaTypes(realMan.Config.MediaType) {
-			config, err := repo.Blobs(opts.Ctx).Get(opts.Ctx, realMan.Config.Digest)
-			if err != nil {
-				opts.WriteDebug(fmt.Sprintf(`get config for "%s"`, realMan.Config.Digest), err)
-			} else {
-				var err error
-				switch realMan.Config.MediaType {
-				case schema2.MediaTypeImageConfig, ocispec.MediaTypeImageConfig:
-					err = json.Unmarshal(config, &m.Image)
-				case HelmChartConfigMediaType:
-					err = json.Unmarshal(config, &m.Chart)
-				}
-				if err != nil {
-					opts.WriteDebug(fmt.Sprintf(`unmarshal config for "%s"`, realMan.Config.Digest), err)
-				}
-			}
-		} else {
-			opts.WriteDebug(fmt.Sprintf(`unsupported media type "%s"`, realMan.Config.MediaType), nil)
-		}
-
-		return &m, nil
-
+			Image:                image,
+			Chart:                chart,
+		}, nil
 	}
 
 	return nil, errors.ErrUnknownManifest
+}
+
+func parseConfig(opts *option.Options, repo distribution.Repository, mediaType string, dgst digest.Digest) (image *ocispec.Image, chart *chart.Metadata, err error) {
+	if IsSupportedConfigMediaTypes(mediaType) {
+		var config []byte
+		config, err = repo.Blobs(opts.Ctx).Get(opts.Ctx, dgst)
+		if err != nil {
+			opts.WriteDebug(fmt.Sprintf(`get config for "%s"`, dgst), err)
+		} else {
+			switch mediaType {
+			case schema2.MediaTypeImageConfig, ocispec.MediaTypeImageConfig:
+				err = json.Unmarshal(config, &image)
+			case HelmChartConfigMediaType:
+				err = json.Unmarshal(config, &chart)
+			}
+			if err != nil {
+				opts.WriteDebug(fmt.Sprintf(`unmarshal config for "%s"`, dgst), err)
+			}
+		}
+	} else {
+		opts.WriteDebug(fmt.Sprintf(`unsupported media type "%s"`, mediaType), nil)
+	}
+	return
 }

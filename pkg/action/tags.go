@@ -21,6 +21,8 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
+const maxWorkers = 100
+
 type tagInfo struct {
 	Tag      string     `json:"tag"`
 	Platform string     `json:"platform"`
@@ -196,7 +198,7 @@ func getTags(opts *option.Options, cli *client.Client) (int, []tagInfo, error) {
 		return 0, nil, err
 	}
 
-	mainifestService, err := repo.Manifests(opts.Ctx)
+	manifestService, err := repo.Manifests(opts.Ctx)
 	if err != nil {
 		opts.WriteDebug("init manifest service", err)
 		return 0, nil, err
@@ -208,62 +210,68 @@ func getTags(opts *option.Options, cli *client.Client) (int, []tagInfo, error) {
 		return 0, nil, err
 	}
 
-	numParellel := opts.Parellel
-	if numParellel > len(tags) {
-		numParellel = len(tags)
+	numParellel := len(tags) / 5
+	if numParellel < 1 {
+		numParellel = 1
+	}
+	if numParellel > maxWorkers {
+		numParellel = maxWorkers
 	}
 	inputCh := make(chan string)
 	stop := make(chan bool)
+	collectStopped := make(chan bool)
 	wg := sync.WaitGroup{}
 	wg.Add(len(tags))
 
 	var tagInfos []tagInfo
-	resultCh := make(chan tagInfo)
+	resultCh := make(chan *tagInfo)
 	for i := 0; i < numParellel; i++ {
-		go fetchWorker(opts, repo, mainifestService, &wg, inputCh, resultCh, stop)
+		go fetchWorker(opts, repo, manifestService, &wg, inputCh, resultCh, stop)
 	}
 	go func() {
 		for _, tag := range tags {
 			inputCh <- tag
 		}
 	}()
-	go collector(&tagInfos, resultCh, stop)
+	go collector(&tagInfos, resultCh, collectStopped)
 
 	wg.Wait()
 	close(stop)
+	close(resultCh)
+	<-collectStopped
 
 	return len(tags), tagInfos, nil
 }
 
-func collector(result *[]tagInfo, resultCh <-chan tagInfo, stop <-chan bool) {
+func collector(result *[]tagInfo, resultCh <-chan *tagInfo, stop chan<- bool) {
 	for {
-		select {
-		case info := <-resultCh:
-			*result = append(*result, info)
-		case <-stop:
-			return
+		info := <-resultCh
+		if info == nil {
+			close(stop)
+			break
 		}
+		*result = append(*result, *info)
 	}
 }
 
 func fetchWorker(
 	opts *option.Options,
 	repo distribution.Repository,
-	mainifestService distribution.ManifestService,
+	manifestService distribution.ManifestService,
 	wg *sync.WaitGroup,
 	inputCh <-chan string,
-	resultCh chan<- tagInfo,
+	resultCh chan<- *tagInfo,
 	stop <-chan bool) {
 
 	for {
 		select {
 		case tag := <-inputCh:
-			infos, err := fetchTagInfos(opts, repo, mainifestService, tag)
+			infos, err := fetchTagInfos(opts, repo, manifestService, tag)
 			if err != nil {
 				opts.WriteDebug(fmt.Sprintf(`fetch get info for "%s"`, tag), err)
 			} else {
 				for _, info := range infos {
-					resultCh <- *info
+					resultCh <- info
 				}
 			}
 			wg.Done()
@@ -276,11 +284,11 @@ func fetchWorker(
 func fetchTagInfos(
 	opts *option.Options,
 	repo distribution.Repository,
-	mainifestService distribution.ManifestService,
+	manifestService distribution.ManifestService,
 	tag string) ([]*tagInfo, error) {
 
 	var dgst digest.Digest
-	man, err := mainifestService.Get(opts.Ctx, "", distribution.WithTag(tag), registryclient.ReturnContentDigest(&dgst))
+	man, err := manifestService.Get(opts.Ctx, "", distribution.WithTag(tag), registryclient.ReturnContentDigest(&dgst))
 	if err != nil {
 		opts.WriteDebug(fmt.Sprintf(`get manifest for "%s"`, tag), err)
 		return nil, err
@@ -289,7 +297,7 @@ func fetchTagInfos(
 	switch realMan := man.(type) {
 	case *manifestlist.DeserializedManifestList:
 		for _, ref := range realMan.Manifests {
-			man, err := mainifestService.Get(opts.Ctx, ref.Digest, registryclient.ReturnContentDigest(&dgst))
+			man, err := manifestService.Get(opts.Ctx, ref.Digest, registryclient.ReturnContentDigest(&dgst))
 			if err != nil {
 				opts.WriteDebug(fmt.Sprintf(`get manifest for list "%s"'s "%s"`, tag, ref.Digest), err)
 				return nil, err
@@ -335,14 +343,8 @@ func getManifestInfo(opts *option.Options, repo distribution.Repository, manifes
 		var created *time.Time
 		platform := ""
 		if realMan.Config.MediaType == schema2.MediaTypeImageConfig || realMan.Config.MediaType == ocispec.MediaTypeImageConfig {
-			config, err := repo.Blobs(opts.Ctx).Get(opts.Ctx, realMan.Config.Digest)
+			image, err := getImage(opts, repo, realMan.Config.Digest)
 			if err != nil {
-				opts.WriteDebug(fmt.Sprintf(`get config for "%s"`, realMan.Config.Digest), err)
-				return nil, err
-			}
-			image := ocispec.Image{}
-			if err := json.Unmarshal(config, &image); err != nil {
-				opts.WriteDebug(fmt.Sprintf(`unmarshal config for "%s"`, realMan.Config.Digest), err)
 				return nil, err
 			}
 			created = image.Created
@@ -367,14 +369,8 @@ func getManifestInfo(opts *option.Options, repo distribution.Repository, manifes
 		var created *time.Time
 		platform := ""
 		if realMan.Config.MediaType == schema2.MediaTypeImageConfig || realMan.Config.MediaType == ocispec.MediaTypeImageConfig {
-			config, err := repo.Blobs(opts.Ctx).Get(opts.Ctx, realMan.Config.Digest)
+			image, err := getImage(opts, repo, realMan.Config.Digest)
 			if err != nil {
-				opts.WriteDebug(fmt.Sprintf(`get config for "%s"`, realMan.Config.Digest), err)
-				return nil, err
-			}
-			image := ocispec.Image{}
-			if err := json.Unmarshal(config, &image); err != nil {
-				opts.WriteDebug(fmt.Sprintf(`unmarshal config for "%s"`, realMan.Config.Digest), err)
 				return nil, err
 			}
 			created = image.Created
@@ -397,4 +393,18 @@ func getManifestInfo(opts *option.Options, repo distribution.Repository, manifes
 		}, nil
 	}
 	return nil, errors.ErrUnknownManifest
+}
+
+func getImage(opts *option.Options, repo distribution.Repository, dgst digest.Digest) (*ocispec.Image, error) {
+	config, err := repo.Blobs(opts.Ctx).Get(opts.Ctx, dgst)
+	if err != nil {
+		opts.WriteDebug(fmt.Sprintf(`get config for "%s"`, dgst), err)
+		return nil, err
+	}
+	image := ocispec.Image{}
+	if err := json.Unmarshal(config, &image); err != nil {
+		opts.WriteDebug(fmt.Sprintf(`unmarshal config for "%s"`, dgst), err)
+		return nil, err
+	}
+	return &image, nil
 }

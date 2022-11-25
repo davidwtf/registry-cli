@@ -54,5 +54,4 @@ func setDefaultOpts(opts *option.Options, cmd *cobra.Command) {
 	if opts.Ctx == nil {
 		opts.Ctx = context.Background()
 	}
-	opts.Parellel = 50
 }
