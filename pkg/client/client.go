@@ -45,6 +45,7 @@ func NewClient(opts *option.Options) (*Client, error) {
 		baseURL:          fmt.Sprintf("%s://%s", scheme, opts.Server),
 		httpClient: &http.Client{
 			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
 				TLSClientConfig: &tls.Config{
 					InsecureSkipVerify: opts.Insecure,
 				},

@@ -17,6 +17,9 @@ const (
 	SortByTag     = "tag"
 	SortBySize    = "size"
 	SortByCreated = "created"
+
+	DefualtRegistry   = "docker.io"
+	DefaultV2Registry = "registry-1.docker.io"
 )
 
 var (
@@ -67,6 +70,10 @@ func (opts *Options) ParseReference(ref string) error {
 	}
 	if canonical, ok := named.(reference.Canonical); ok {
 		opts.Digest = canonical.Digest()
+	}
+
+	if opts.Server == DefualtRegistry {
+		opts.Server = DefaultV2Registry
 	}
 
 	return nil
