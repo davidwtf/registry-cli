@@ -31,7 +31,7 @@ go.build.%:
 	$(eval ARCH := $(word 2,$(subst _, ,$(PLATFORM))))
 	$(eval OUTPUT_DIR := _output/$(OS)/$(ARCH))
 	mkdir -p "$(OUTPUT_DIR)"
-	CGO_ENABLED=0 GOOS= GOARCH=$(ARCH) $(GO) build -buildmode=pie $(GO_LDFLAGS) -o '$(OUTPUT_DIR)/registrycli' ./cmd
+	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -buildmode=pie $(GO_LDFLAGS) -o '$(OUTPUT_DIR)/registrycli' ./cmd
 
 .PHONY: package
 package: build.all tar.all
